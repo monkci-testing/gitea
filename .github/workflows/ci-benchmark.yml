@@ -1,0 +1,50 @@
+name: CI Benchmark
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - monkci-ubuntu-24.04-4-6000iops
+          - monkci-ubuntu-24.04-4-4000iops
+          - monkci-ubuntu-24.04-4-3900iops
+          - monkci-ubuntu-24.04-4-3600iops
+          - depot-ubuntu-24.04-4
+          - ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Build backend dependencies
+        run: make deps-backend
+
+      - name: Build backend
+        run: GOEXPERIMENT='' make backend
+        env:
+          TAGS: bindata gogit sqlite sqlite_unlock_notify
+
+      - name: Run SQLite migration tests
+        run: make test-sqlite-migration
+
+      - name: Run SQLite tests
+        run: GOEXPERIMENT='' make test-sqlite
+        timeout-minutes: 50
+        env:
+          TAGS: bindata gogit sqlite sqlite_unlock_notify
+          RACE_ENABLED: true
+          TEST_TAGS: gogit sqlite sqlite_unlock_notify
